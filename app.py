@@ -63,7 +63,7 @@ def index():
 
 
 @app.route('/v1/resources/tickets/', methods=['GET'])
-def tickets_get():
+def get_tickets():
     conn = None
     try:
         conn = sqlite3.connect("ticketing_db")
@@ -102,7 +102,7 @@ def tickets_get():
 
 
 @app.route('/v1/resources/tickets/', methods=['PUT'])
-def tickets_put():
+def put_tickets():
     conn = None
     try:
         conn = sqlite3.connect("ticketing_db")
