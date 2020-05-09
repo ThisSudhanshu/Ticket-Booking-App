@@ -185,9 +185,9 @@ def reset():
 def not_found_error(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
-@app.errorhandler(501)
+@app.errorhandler(500)
 def not_found_error(error):
-    return make_response(jsonify({'error': 'Internal server error'}), 501)
+    return make_response(jsonify({'error': 'Internal server error'}), 500)
 
 if __name__ == '__main__':
     create_database()
