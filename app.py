@@ -19,12 +19,6 @@ def add_passenger(name, phone):
 def index():
     return "Visit https://github.com/aReDDD/Ticket-Booking-App to learn more about this API!"
 
-@app.route('/v1/')
-@app.route('/v1/resources')
-def not_found():
-    return make_response(jsonify({'error': 'Bad request'}), 400)
-
-
 @app.route('/v1/resources/tickets/', methods=['GET', 'PUT'])
 def tickets():
     if request.method == 'GET':
@@ -84,8 +78,22 @@ def get_passenger_details():
         return make_response(jsonify({'error': 'Not found'}), 404)
 
 
+@app.route('/v1/reset/', methods=['GET'])
+def reset():
+    passengers.clear()
+    for x in seats:
+        seats[x]['status'] = 'open'
+        seats[x]['passenger_id'] = None
+    return make_response(jsonify({'Success': 'Reset Complete'}), 200)
 
 
+@app.errorhandler(404)
+def not_found_error(error):
+    return make_response(jsonify({'error': 'Not found'}), 404)
+
+@app.errorhandler(501)
+def not_found_error(error):
+    return make_response(jsonify({'error': 'Internal server error'}), 501)
 
 if __name__ == '__main__':
     app.run(debug=True)
