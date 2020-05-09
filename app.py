@@ -3,7 +3,7 @@ from collections import defaultdict
 from flask import Flask, jsonify, make_response, request
 
 app = Flask(__name__)
-seats = {1: {'status': 'open', 'passenger_id' : 23}, 2: {'status':'open', 'passenger_id' : 35}, 3: {'status':'closed', 'passenger_id' : 40}, 4: {'status':'closed', 'passenger_id' : 55}}
+seats = {1: {'status': 'open', 'passenger_id' : None}, 2: {'status':'open', 'passenger_id' : None}, 3: {'status':'closed', 'passenger_id' : 40}, 4: {'status':'closed', 'passenger_id' : 55}}
 passengers = {35: {'name': 'arjun', 'phone': 123}, 23: {'name':'chakra', 'phone': 134}, 40:{'name': 'shudh', 'phone':124},
               55: {'name':'test', 'phone': 1234}}
 
@@ -37,7 +37,7 @@ def get_tickets():
 def get_passenger_details():
     query_parameters = request.args
     id = query_parameters.get('bus_ticket_id')
-    if id and id.isdigit() and int(id) in seats:
+    if id and id.isdigit() and int(id) in seats and seats[int(id)]['passenger_id']:
         passenger_id = seats[int(id)]['passenger_id']
         return jsonify(passengers[passenger_id])
     elif not id:
@@ -50,4 +50,3 @@ def get_passenger_details():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
