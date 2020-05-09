@@ -1,19 +1,59 @@
 #!flask/bin/python
 from collections import defaultdict
 from flask import Flask, jsonify, make_response, request
-global c
-c = 56
-app = Flask(__name__)
+import sqlite3
+from sqlite3 import Error
 
-seats = {1: {'status': 'open', 'passenger_id' : None}, 2: {'status':'open', 'passenger_id' : None}, 3: {'status':'closed', 'passenger_id' : 40}, 4: {'status':'closed', 'passenger_id' : 55}}
-passengers = {35: {'name': 'arjun', 'phone': 123}, 23: {'name':'chakra', 'phone': 134}, 40:{'name': 'shudh', 'phone':124},
-              55: {'name':'test', 'phone': 1234}}
+app = Flask(__name__)
+def create_database():
+    """ create a database connection to a SQLite database """
+    conn = None
+    try:
+        conn = sqlite3.connect("ticketing_db")
+        conn.execute('''CREATE TABLE IF NOT EXISTS Passenger
+                             (ID INTEGER PRIMARY KEY NOT NULL ,
+                             NAME          TEXT    NOT NULL,
+                             PHONE         INT NOT NULL
+                             );''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS Seat
+                     (ID INT PRIMARY KEY     NOT NULL,
+                     STATUS          TEXT    NOT NULL,
+                     PASSENGER_ID    INT,
+                     FOREIGN KEY (PASSENGER_ID)
+       REFERENCES Passenger (id)
+                     );''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS Counter
+                             (ID INT PRIMARY KEY     NOT NULL,
+                             c INT NOT NULL
+                             );''')
+        for x in range(1, 41):
+            l = [x, 'open', None]
+            conn.execute("INSERT or IGNORE INTO Seat values(?, ?, ?);", l)
+        conn.execute("INSERT or IGNORE INTO Counter values(1,1);")
+        conn.commit()
+    except Error as e:
+        return (jsonify({'error': e}))
+    finally:
+        if conn:
+            conn.close()
+
+
 
 def add_passenger(name, phone):
-    global c
-    passengers[c] = {'name': name, 'phone': phone}
-    c += 1
-    return c - 1
+    conn = None
+    try:
+        conn = sqlite3.connect("ticketing_db")
+        cur = conn.execute('''Select  c from Counter where id = 1''')
+        mx = next(cur)[0]
+        conn.execute('''INSERT or IGNORE INTO Passenger(id, name, phone) values(?, ?, ?);''', [mx, name, phone])
+        cur = conn.execute('''Update Counter set c = ? where id = 1''', [mx + 1])
+        conn.commit()
+        return mx
+    except Error as e:
+        return make_response({'error': repr(e)}, 500)
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/')
 def index():
@@ -21,71 +61,125 @@ def index():
 
 @app.route('/v1/resources/tickets/', methods=['GET', 'PUT'])
 def tickets():
-    if request.method == 'GET':
-        query_parameters = request.args
-        get_id = query_parameters.get('id')
-        get_status = query_parameters.get('status')
-        tickets = {}
-        if get_id:
-            if get_id.isdigit() and int(get_id) in seats:
-                return jsonify(seats[int(get_id)])
+    conn = None
+    try:
+        conn = sqlite3.connect("ticketing_db")
+        if request.method == 'GET':
+            query_parameters = request.args
+            get_id = query_parameters.get('id')
+            get_status = query_parameters.get('status')
+            if get_id:
+                if get_id.isdigit() and int(get_id)>= 1 and int(get_id) <= 40:
+                    cursor = conn.execute("Select * from seat where id = ?", [get_id])
+                    d = {}
+                    for row in cursor:
+                        d[row[0]] = {'status': row[1], 'passenger_id': row[2]}
+                    return jsonify(d)
+                else:
+                    return make_response(jsonify({'error': 'Bad request'}), 400)
+            else:
+                if get_status in ['open', 'closed']:
+                    cursor = conn.execute("Select * from seat where status = ?", [get_status])
+                    d = {}
+                    for row in cursor:
+                        d[row[0]] = {'status': row[1], 'passenger_id': row[2]}
+                    return jsonify(d)
+                elif get_status:
+                    return make_response(jsonify({'error': 'Bad request'}), 400)
+                else:
+                    cursor = conn.execute("Select * from seat;")
+                    d = {}
+                    for row in cursor:
+                        d[row[0]] = {'status': row[1], 'passenger_id': row[2]}
+                    return jsonify(d)
+        else:
+            get_seat_id = request.json['seat_id'] if 'seat_id' in request.json else ''
+            get_status = request.json['status'] if 'status' in request.json else ''
+            get_passenger_name = request.json['name'] if 'name' in request.json else ''
+            get_passenger_phone = request.json['phone'] if 'phone' in request.json else ''
+            if get_status == 'closed':
+                if get_seat_id.isdigit() and int(get_seat_id) >= 1 and int(get_seat_id) <= 40 and get_passenger_phone and get_passenger_name:
+                    cursor = conn.execute("Select status from seat where id = ?", [get_seat_id])
+                    if next(cursor)[0] == "open":
+                        passenger_id = add_passenger(get_passenger_name, get_passenger_phone)
+                        cursor = conn.execute("Update seat set passenger_id = ?, status = ? where id = ?", [passenger_id, get_status, get_seat_id])
+                        conn.commit()
+                        d = {}
+                        cursor = conn.execute("Select * from seat where id = ?", [get_seat_id])
+                        row = next(cursor)
+                        d[row[0]] = {'status': row[1], 'passenger_id': row[2]}
+                        return jsonify(d)
+                    else:
+                        return make_response(jsonify({'error': 'Bad request/seat already closed'}), 400)
+                else:
+                    return make_response(jsonify({'error': 'Bad request'}), 400)
+            elif get_status == 'open':
+                if get_seat_id.isdigit() and int(get_seat_id) >= 1 and int(get_seat_id) <= 40:
+                    cursor = conn.execute("Select status from seat where id = ?", [get_seat_id])
+                    if next(cursor)[0] == "closed":
+                        cursor = conn.execute("Update seat set passenger_id = ?, status = ? where id = ?",
+                                              [None, get_status, get_seat_id])
+                        conn.commit()
+                        d = {}
+                        cursor = conn.execute("Select id, passenger_id, status from seat where id = ?", [get_seat_id])
+                        row = next(cursor)
+                        d[row[0]] = {'status': row[1], 'passenger_id': row[2]}
+                        return jsonify(d)
+                    else:
+                        return make_response(jsonify({'error': 'Bad request/seat already open'}), 400)
+                else:
+                    return make_response(jsonify({'error': 'Bad request'}), 400)
             else:
                 return make_response(jsonify({'error': 'Bad request'}), 400)
-        else:
-            if get_status in ['open', 'closed']:
-                for x in seats:
-                    if get_status == seats[x]['status']:
-                        tickets[x] = seats[x]
-                return jsonify(tickets)
-            elif get_status:
-                return make_response(jsonify({'error': 'Bad request'}), 400)
-            else:
-                return jsonify(seats)
-    else:
-        get_seat_id = request.json['seat_id'] if 'seat_id' in request.json else ''
-        get_status = request.json['status'] if 'status' in request.json else ''
-        get_passenger_name = request.json['name'] if 'name' in request.json else ''
-        get_passenger_phone = request.json['phone'] if 'phone' in request.json else ''
-        if get_status == 'closed':
-            if get_seat_id.isdigit() and int(get_seat_id) in seats and seats[int(get_seat_id)]['status'] == 'open' and get_passenger_phone and get_passenger_name:
-                passenger_id = add_passenger(get_passenger_name, get_passenger_phone)
-                seats[int(get_seat_id)]['passenger_id'] = passenger_id
-                seats[int(get_seat_id)]['status'] = get_status
-                return jsonify(seats[(int(get_seat_id))])
-            else:
-                return make_response(jsonify({'error': 'Bad request/seat already closed'}), 400)
-        elif get_status == 'open':
-            if get_seat_id.isdigit() and int(get_seat_id) in seats and seats[int(get_seat_id)]['status'] == 'closed':
-                seats[int(get_seat_id)]['passenger_id'] = None
-                seats[int(get_seat_id)]['status'] = get_status
-                return jsonify(seats[(int(get_seat_id))])
-            else:
-                return make_response(jsonify({'error': 'Bad request/seat already open'}), 400)
-        else:
-            return make_response(jsonify({'error': 'Bad request'}), 400)
+    except Error as e:
+        return make_response({'error': repr(e)}, 400)
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route('/v1/resources/passengers/', methods=['GET'])
 def get_passenger_details():
-    query_parameters = request.args
-    id = query_parameters.get('bus_ticket_id')
-    if id and id.isdigit() and int(id) in seats and seats[int(id)]['passenger_id']:
-        passenger_id = seats[int(id)]['passenger_id']
-        return jsonify(passengers[passenger_id])
-    elif not id:
-        return jsonify(passengers)
-    else:
-        return make_response(jsonify({'error': 'Not found'}), 404)
+    conn = None
+    try:
+        conn = sqlite3.connect("ticketing_db")
+        query_parameters = request.args
+        id = query_parameters.get('bus_ticket_id')
+        if id and id.isdigit() and int(id) >= 1 and int(id) <= 40:
+            cursor = conn.execute("Select * from Passenger where id = (Select passenger_id from Seat where id = ?);", [id])
+            d = {}
+            for row in cursor:
+                d[row[0]] = {'name': row[1], 'phone': row[2]}
+            return jsonify(d)
+        elif not id:
+            cursor = conn.execute("Select * from Passenger where id in (Select passenger_id from Seat);")
+            d = {}
+            for row in cursor:
+                d[row[0]] = {'name': row[1], 'phone': row[2]}
+            return jsonify(d)
+        else:
+            return make_response(jsonify({'error': 'Not found'}), 404)
+    except Error as e:
+        return make_response({'error': repr(e)}, 500)
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route('/v1/reset/', methods=['GET'])
 def reset():
-    passengers.clear()
-    for x in seats:
-        seats[x]['status'] = 'open'
-        seats[x]['passenger_id'] = None
-    return make_response(jsonify({'Success': 'Reset Complete'}), 200)
-
+    conn = None
+    try:
+        conn = sqlite3.connect("ticketing_db")
+        cur = conn.execute("DELETE from Passenger")
+        cur = conn.execute("Update Seat set status = ?, passenger_id = ?", ["open", None])
+        conn.commit()
+        return make_response(jsonify({'Success': 'Reset Complete'}), 200)
+    except Error as e:
+        return make_response({'error': repr(e)}, 500)
+    finally:
+        if conn:
+            conn.close()
 
 @app.errorhandler(404)
 def not_found_error(error):
@@ -96,4 +190,5 @@ def not_found_error(error):
     return make_response(jsonify({'error': 'Internal server error'}), 501)
 
 if __name__ == '__main__':
+    create_database()
     app.run(debug=True)
