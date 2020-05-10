@@ -1,6 +1,7 @@
 import requests
 import json
 
+
 def test_functionalities():
     url = "http://localhost:5000/v1/reset"
     requests.get(url)
