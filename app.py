@@ -129,7 +129,7 @@ def put_tickets():
             else:
                 return make_response(jsonify({'error': 'Bad request'}), 400)
         elif get_status == 'open':
-            if get_seat_id.isdigit() and int(get_seat_id) >= 1 and int(get_seat_id) <= 40:
+            if str(get_seat_id).isdigit() and int(get_seat_id) >= 1 and int(get_seat_id) <= 40:
                 cursor = conn.execute("Select status from seat where id = ?", [get_seat_id])
                 if next(cursor)[0] == "closed":
                     cursor = conn.execute("Update seat set passenger_id = ?, status = ? where id = ?",
@@ -160,7 +160,7 @@ def get_passenger_details():
         conn = sqlite3.connect("ticketing_db")
         query_parameters = request.args
         id = query_parameters.get('bus_ticket_id')
-        if id and id.isdigit() and int(id) >= 1 and int(id) <= 40:
+        if id and str(id).isdigit() and int(id) >= 1 and int(id) <= 40:
             cursor = conn.execute("Select * from Passenger where id = (Select passenger_id from Seat where id = ?);",
                                   [id])
             d = {}
@@ -174,7 +174,7 @@ def get_passenger_details():
                 d[row[0]] = {'name': row[1], 'phone': row[2]}
             return jsonify(d)
         else:
-            return make_response(jsonify({'error': 'Not found'}), 404)
+            return make_response(jsonify({'error': 'Bad request'}), 400)
     except Error as e:
         return make_response({'error': repr(e)}, 500)
     finally:
@@ -188,6 +188,7 @@ def reset():
     try:
         conn = sqlite3.connect("ticketing_db")
         cur = conn.execute("DELETE from Passenger")
+        cur = conn.execute('''Update Counter set c = 1 where id = 1''')
         cur = conn.execute("Update Seat set status = ?, passenger_id = ?", ["open", None])
         conn.commit()
         return make_response(jsonify({'Success': 'Reset Complete'}), 200)
