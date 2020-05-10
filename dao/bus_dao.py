@@ -125,12 +125,12 @@ def open_ticket(get_seat_id):
             cursor = conn.execute("Select status from seat where id = ?", [get_seat_id])
             if next(cursor)[0] == "closed":
                 cursor = conn.execute("Update seat set passenger_id = ?, status = ? where id = ?",
-                                      [None, get_status, get_seat_id])
+                                      [None, "open", get_seat_id])
                 conn.commit()
                 d = {}
                 cursor = conn.execute("Select id, passenger_id, status from seat where id = ?", [get_seat_id])
                 row = next(cursor)
-                d[row[0]] = {'status': row[1], 'passenger_id': row[2]}
+                d[row[0]] = {'passenger_id': row[1], 'status': row[2]}
                 return jsonify(d)
             else:
                 return make_response(jsonify({'error': 'Bad request/seat already open'}), 400)

@@ -18,7 +18,7 @@ def test_functionalities():
     resp = requests.get(url)
     assert resp.status_code == 200
     assert len(resp.json()) == 0
-    assert resp.status_code == 200
+
 
     url = "http://localhost:5000/v1/resources/tickets?status=open"
     resp = requests.get(url)
@@ -76,6 +76,12 @@ def test_functionalities():
     resp = resp.json()
     assert resp["1"]["name"] == "Arjun"
     assert resp["1"]["phone"] == 12354567890
+
+    url = "http://localhost:5000/v1/resources/tickets/"
+    payload = {"seat_id": 12, "status": "open"}
+    resp = requests.put(url, headers=headers, data=json.dumps(payload, indent=4))
+    assert resp.status_code == 200
+    assert resp.json()["12"]["status"] == "open"
 
 
 if __name__ == '__main__':

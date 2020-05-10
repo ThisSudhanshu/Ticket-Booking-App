@@ -30,11 +30,6 @@ def test_exceptions():
 
 
     url = "http://localhost:5000/v1/resources/tickets/"
-    payload = {"seat_id":12, "name":"test", "phone": "12354567899", "status":"closed"}
-    resp = requests.put(url, headers=headers, data=json.dumps(payload, indent=4))
-    assert resp.status_code == 400
-
-    url = "http://localhost:5000/v1/resources/tickets/"
     payload = {"seat_id": 20, "name": "test", "phone": "12354567899", "status": "open"}
     resp = requests.put(url, headers=headers, data=json.dumps(payload, indent=4))
     assert resp.status_code == 400
